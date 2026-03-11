@@ -15,7 +15,7 @@ npm run typecheck  # type-check only (no emit)
 
 Browser-only PDF stitching tool (no backend). Everything runs client-side; files never leave the browser.
 
-**Stack:** Vue 3 (Composition API + `<script setup>`) · TypeScript · Vite · pdf-lib
+**Stack:** Vue 3 (Composition API + `<script setup>`) · TypeScript · Vite · pdf-lib · pdfjs-dist
 
 ### Key files
 
@@ -23,9 +23,22 @@ Browser-only PDF stitching tool (no backend). Everything runs client-side; files
 |------|---------|
 | `src/lib/stitcher.ts` | Core PDF imposition logic + `logPageBoxes` helper. The only place that imports `pdf-lib`. |
 | `src/types.ts` | `StitchSettings` and `PageBox` types shared between UI and lib. |
-| `src/components/StitchSettings.vue` | Settings form (grid, page box, overlap, page range, blank slots). |
+| `src/components/StitchSettings.vue` | Settings form (grid, page box, overlap, page range). |
+| `src/components/TileGrid.vue` | Visual tile grid: page thumbnails (pdfjs), drag-to-reorder, insert blank, remove tile. |
 | `src/components/PdfViewer.vue` | PDF viewer with pan/zoom; accepts `label`, `subtitle`, `oversample`, `preserveView` props. |
-| `src/App.vue` | File drop/upload, orchestrates processing, download. |
+| `src/App.vue` | File drop/upload, orchestrates processing, download. Two-column layout: controls + tabbed right panel (Tile Order / Result). |
+
+### Layout
+
+Two-column workspace: `400px` controls column + `1fr` right panel. The right panel has two tabs:
+- **Tile Order** — always visible when a file is loaded; shows TileGrid
+- **Result** — shows the result PdfViewer; auto-activates after stitching
+
+### Tile sequence data model
+
+`StitchSettings.tileSequence: (number | null)[]` — ordered tile sequence where numbers are 1-based within the page range and `null` = blank tile. Empty array means natural order (computed at stitch time). TileGrid initialises it and emits updates; stitcher reads it directly.
+
+**Reactive settings caveat:** `settings` in App.vue is a `const reactive(...)` object. StitchSettings emits a full replacement object via `update:modelValue`, so it is wired as `:model-value="settings" @update:model-value="Object.assign(settings, $event)"` — not `v-model` — to avoid the silent reassignment failure on a const reactive.
 
 ### How stitching works
 
@@ -33,7 +46,7 @@ Browser-only PDF stitching tool (no backend). Everything runs client-side; files
 
 1. Loads source PDF with `PDFDocument.load`
 2. Slices pages to the requested range
-3. Builds a tile sequence, inserting `null` (blank) at the user-specified 1-based slot positions; source pages fill the rest in order
+3. Uses `settings.tileSequence` directly (maps 1-based range numbers → 0-based absolute indices); falls back to natural order if empty
 4. Reads tile dimensions from the selected `PageBox` (trim/media/crop/bleed/art) of the first page in range
 5. Calculates output page dimensions: `cols × (tileW − overlapX) + overlapX` wide, same pattern vertically
 6. Embeds all needed source pages once with `newDoc.embedPdf(srcDoc, indices)`
