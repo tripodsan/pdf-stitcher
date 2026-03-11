@@ -86,8 +86,10 @@ async function renderPage(pageNum: number) {
   if (!pdfDoc || !canvas.value) return
   await nextTick()  // ensure DOM is laid out before measuring container width
   if (renderTask) {
-    renderTask.cancel()
+    const stale = renderTask
     renderTask = null
+    stale.cancel()
+    try { await stale.promise } catch { /* RenderingCancelledException — expected */ }
   }
   rendering.value = true
   try {
@@ -174,8 +176,8 @@ function endPan() {
 
 watch(
   () => props.layerVisibility,
-  (vis) => {
-    if (!ocConfigRef || !vis) return
+  (vis, prev) => {
+    if (!ocConfigRef || !vis || !prev) return
     for (const [name, visible] of Object.entries(vis)) {
       const id = nameToIdRef.get(name)
       if (id !== undefined) ocConfigRef.setVisibility(id, visible)
