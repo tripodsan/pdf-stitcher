@@ -25,15 +25,6 @@ function updateRange(which: 'start' | 'end', raw: string) {
   update('pageRange', which === 'start' ? [val, e] : [s, val])
 }
 
-const blankSlotsStr = computed(() => props.modelValue.blankSlots.join(', '))
-
-function updateBlankSlots(raw: string) {
-  const slots = raw
-    .split(',')
-    .map(s => parseInt(s.trim(), 10))
-    .filter(n => !isNaN(n) && n > 0)
-  update('blankSlots', slots)
-}
 </script>
 
 <template>
@@ -114,19 +105,6 @@ function updateBlankSlots(raw: string) {
       <p class="hint">Total pages: {{ totalPages }}</p>
     </section>
 
-    <section>
-      <h3>Blank Tiles</h3>
-      <label class="full">
-        Insert blanks at positions (comma-separated)
-        <input
-          type="text"
-          placeholder="e.g. 1, 4, 7"
-          :value="blankSlotsStr"
-          @input="updateBlankSlots(($event.target as HTMLInputElement).value)"
-        />
-      </label>
-      <p class="hint">1-based positions in the final tile sequence where blank tiles are inserted.</p>
-    </section>
   </div>
 </template>
 

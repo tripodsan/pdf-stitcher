@@ -23,34 +23,6 @@ function getBox(page: PDFPage, box: PageBox) {
 
 const MM_TO_PT = 72 / 25.4
 
-/**
- * Build the ordered tile sequence, inserting null (blank) at the specified
- * 1-based slot positions. Source pages fill all remaining slots in order.
- */
-function buildTileSequence(
-  pageIndices: number[],
-  blankSlots: number[],
-): (number | null)[] {
-  const blankSet = new Set(blankSlots)
-  const tiles: (number | null)[] = []
-  let pageIdx = 0
-  const totalSlots = pageIndices.length + blankSet.size
-
-  for (let pos = 1; pos <= totalSlots; pos++) {
-    if (blankSet.has(pos)) {
-      tiles.push(null)
-    } else if (pageIdx < pageIndices.length) {
-      tiles.push(pageIndices[pageIdx++])
-    }
-  }
-
-  // Append any remaining pages if blankSlots contained out-of-range values
-  while (pageIdx < pageIndices.length) {
-    tiles.push(pageIndices[pageIdx++])
-  }
-
-  return tiles
-}
 
 function applyDisabledLayers(doc: PDFDocument, disabledNames: string[]): void {
   const disabled = new Set(disabledNames)
@@ -160,7 +132,12 @@ export async function stitchPdf(
     (_, i) => startIdx + i,
   )
 
-  const tiles = buildTileSequence(rangeIndices, settings.blankSlots)
+  let tiles: (number | null)[]
+  if (settings.tileSequence.length > 0) {
+    tiles = settings.tileSequence.map(n => n === null ? null : startIdx + n - 1)
+  } else {
+    tiles = rangeIndices
+  }
 
   const overlapX = settings.overlapX * MM_TO_PT
   const overlapY = settings.overlapY * MM_TO_PT

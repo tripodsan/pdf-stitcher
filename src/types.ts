@@ -18,10 +18,10 @@ export interface StitchSettings {
   /** Vertical overlap between tiles, in mm */
   overlapY: number
   /**
-   * 1-based positions in the final tile sequence where blank tiles are inserted.
-   * e.g. [1, 4] inserts a blank as the 1st and 4th tile; source pages fill the rest.
+   * Ordered tile sequence. Numbers are 1-based within the page range; null = blank tile.
+   * Empty array = natural order with no blanks (computed at stitch time).
    */
-  blankSlots: number[]
+  tileSequence: (number | null)[]
   /** Which PDF box defines tile dimensions. Default: 'trim' */
   pageBox: PageBox
   /** Names of layers to suppress in the output PDF */

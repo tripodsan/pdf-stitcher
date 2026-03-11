@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import StitchSettings from './components/StitchSettings.vue'
 import PdfViewer from './components/PdfViewer.vue'
+import TileGrid from './components/TileGrid.vue'
 import { stitchPdf, logPageBoxes } from './lib/stitcher'
 import type { StitchSettings as StitchSettingsType, Layer } from './types'
 
@@ -15,6 +16,7 @@ const sourceBytes = ref<ArrayBuffer | null>(null)
 const resultBytes = ref<ArrayBuffer | null>(null)
 const resultDims = ref<{ w: number; h: number } | null>(null)
 const layers = ref<Layer[]>([])
+const activeTab = ref<'tiles' | 'result'>('tiles')
 
 const PT_TO_MM = 25.4 / 72
 
@@ -23,22 +25,18 @@ const settings = reactive<StitchSettingsType>({
   columns: 2,
   overlapX: 5,
   overlapY: 5,
-  blankSlots: [],
+  tileSequence: [],
   pageBox: 'trim',
   disabledLayers: [],
 })
-
-const layerVisibility = computed<Record<string, boolean> | null>(() =>
-  layers.value.length
-    ? Object.fromEntries(layers.value.map(l => [l.name, l.visible]))
-    : null,
-)
 
 const disabledLayers = computed(() =>
   layers.value.filter(l => !l.visible).map(l => l.name),
 )
 
 watch(disabledLayers, (names) => { settings.disabledLayers = names })
+
+watch(() => settings.pageRange, () => { settings.tileSequence = [] }, { deep: true })
 
 function onLayersLoaded(newLayers: Layer[]) {
   layers.value = newLayers
@@ -56,6 +54,7 @@ async function onFileSelected(f: File) {
   resultBytes.value = null
   resultDims.value = null
   error.value = null
+  activeTab.value = 'tiles'
   try {
     sourceBytes.value = await f.arrayBuffer()
     logPageBoxes(sourceBytes.value)
@@ -95,6 +94,7 @@ async function process() {
     resultBytes.value = buf
     const blob = new Blob([buf], { type: 'application/pdf' })
     resultUrl.value = URL.createObjectURL(blob)
+    activeTab.value = 'result'
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'An unexpected error occurred.'
   } finally {
@@ -120,6 +120,7 @@ function clearFile() {
   resultDims.value = null
   totalPages.value = 0
   layers.value = []
+  activeTab.value = 'tiles'
 }
 </script>
 
@@ -159,19 +160,10 @@ function clearFile() {
         </template>
       </div>
 
-      <!-- Three-column: source viewer + settings + result viewer -->
-      <div v-if="file" class="workspace" :class="{ 'has-result': resultBytes }">
-        <PdfViewer
-          class="source-viewer"
-          :source="sourceBytes"
-          label="Source"
-          :layer-visibility="layerVisibility"
-          @loaded="onSourceLoaded"
-          @layers-loaded="onLayersLoaded"
-        />
-
+      <!-- Two-column: controls | right panel (tabs) -->
+      <div v-if="file" class="workspace">
         <div class="controls">
-          <StitchSettings v-model="settings" :total-pages="totalPages" />
+          <StitchSettings :model-value="settings" :total-pages="totalPages" @update:model-value="Object.assign(settings, $event)" />
 
           <div v-if="layers.length > 1" class="layers">
             <h3 class="layers-title">Layers</h3>
@@ -199,15 +191,47 @@ function clearFile() {
           <p v-if="resultUrl && !error" class="success">Done! Click "Download result" to save.</p>
         </div>
 
-        <PdfViewer
-          v-if="resultBytes"
-          class="result-viewer"
-          :source="resultBytes"
-          :oversample="3"
-          :preserve-view="true"
-          label="Result"
-          :subtitle="resultDims ? `${resultDims.w} × ${resultDims.h} mm` : undefined"
-        />
+        <div class="right-panel">
+          <div class="tab-bar">
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'tiles' }"
+              @click="activeTab = 'tiles'"
+            >
+              Tile Order
+            </button>
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'result' }"
+              :disabled="!resultBytes"
+              @click="activeTab = 'result'"
+            >
+              Result
+            </button>
+          </div>
+
+          <div v-show="activeTab === 'tiles'" class="tab-pane">
+            <TileGrid
+              v-model="settings.tileSequence"
+              :source-bytes="sourceBytes"
+              :page-range="settings.pageRange"
+              :columns="settings.columns"
+              @loaded="onSourceLoaded"
+              @layers-loaded="onLayersLoaded"
+            />
+          </div>
+
+          <div v-show="activeTab === 'result'" class="tab-pane">
+            <PdfViewer
+              v-if="resultBytes"
+              :source="resultBytes"
+              :oversample="3"
+              :preserve-view="true"
+              label="Result"
+              :subtitle="resultDims ? `${resultDims.w} × ${resultDims.h} mm` : undefined"
+            />
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -341,13 +365,8 @@ header p {
   align-items: start;
 }
 
-.workspace.has-result {
-  grid-template-columns: 400px 1fr 750px;
-}
-
 @media (max-width: 700px) {
-  .workspace,
-  .workspace.has-result {
+  .workspace {
     grid-template-columns: 1fr;
   }
 }
@@ -362,7 +381,59 @@ header p {
   gap: 1.5rem;
 }
 
-.result-viewer { }
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0;
+}
+
+.tab-btn {
+  padding: 0.55rem 1.25rem;
+  border-radius: 8px 8px 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+  bottom: -1px;
+}
+
+.tab-btn:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.tab-btn.active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  border-bottom-color: var(--color-surface);
+}
+
+.tab-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tab-pane {
+  /* TileGrid and PdfViewer are self-contained */
+}
+
+.tab-pane .tile-grid-section,
+.tab-pane .viewer {
+  border-radius: 0 8px 8px 8px;
+}
 
 .actions {
   display: flex;
