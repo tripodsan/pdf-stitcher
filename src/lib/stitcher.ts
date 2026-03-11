@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, degrees } from 'pdf-lib'
 import type { PDFPage } from 'pdf-lib'
 import type { PageBox, StitchSettings } from '../types'
 
@@ -131,10 +131,21 @@ export async function stitchPdf(
 
     const col = i % columns
     const row = Math.floor(i / columns)
-    const x = col * strideX - refBox.x
-    const y = (rows - 1 - row) * strideY - refBox.y
+    let x = col * strideX - refBox.x
+    let y = (rows - 1 - row) * strideY - refBox.y
 
-    page.drawPage(embedded, { x, y })
+    // PDF /Rotate is clockwise. embedPdf bakes the content stream but not the
+    // rotation, so we must apply it manually and shift the draw origin so the
+    // rotated content still lands in the correct tile slot.
+    const tileAngle = allPages[tileIdx].getRotation().angle
+    if (tileAngle === 90)       { y += tileH }
+    else if (tileAngle === 180) { x += tileW; y += tileH }
+    else if (tileAngle === 270) { x += tileW }
+
+    page.drawPage(embedded, {
+      x, y,
+      ...(tileAngle ? { rotate: degrees(-tileAngle) } : {}),
+    })
   }
 
   return { bytes: await newDoc.save(), widthPt: pageW, heightPt: pageH }
