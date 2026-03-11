@@ -25,6 +25,7 @@ const settings = reactive<StitchSettingsType>({
 function onSourceLoaded(pages: number) {
   totalPages.value = pages
   settings.pageRange = [1, pages]
+  settings.columns = Math.max(1, Math.round(Math.sqrt(pages)))
 }
 
 async function onFileSelected(f: File) {
