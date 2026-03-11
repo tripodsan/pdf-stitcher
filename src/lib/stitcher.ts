@@ -3,13 +3,21 @@ import type { PDFPage } from 'pdf-lib'
 import type { PageBox, StitchSettings } from '../types'
 
 function getBox(page: PDFPage, box: PageBox) {
-  switch (box) {
-    case 'media': return page.getMediaBox()
-    case 'crop':  return page.getCropBox()
-    case 'bleed': return page.getBleedBox()
-    case 'art':   return page.getArtBox()
-    default:      return page.getTrimBox()
+  const r = (() => {
+    switch (box) {
+      case 'media': return page.getMediaBox()
+      case 'crop':  return page.getCropBox()
+      case 'bleed': return page.getBleedBox()
+      case 'art':   return page.getArtBox()
+      default:      return page.getTrimBox()
+    }
+  })()
+  // Swap width/height when page is rotated 90° or 270° so tile dims match visual orientation
+  const angle = page.getRotation().angle
+  if (angle === 90 || angle === 270) {
+    return { x: r.y, y: r.x, width: r.height, height: r.width }
   }
+  return r
 }
 
 const MM_TO_PT = 72 / 25.4
@@ -55,7 +63,8 @@ export async function logPageBoxes(fileBytes: ArrayBuffer): Promise<void> {
     const a = page.getArtBox()
     const fmt = (r: { x: number; y: number; width: number; height: number }) =>
       `${r.width.toFixed(2)} × ${r.height.toFixed(2)}  (x:${r.x.toFixed(2)} y:${r.y.toFixed(2)})`
-    console.group(`Page ${i + 1}`)
+    const rot = page.getRotation().angle
+    console.group(`Page ${i + 1}${rot ? `  [rotate: ${rot}°]` : ''}`)
     console.log(`  Media: ${fmt(m)}`)
     console.log(`   Crop: ${fmt(c)}`)
     console.log(`  Bleed: ${fmt(b)}`)
