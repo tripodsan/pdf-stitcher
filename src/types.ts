@@ -2,7 +2,6 @@ export interface StitchSettings {
   /** 1-based inclusive range. null = all pages */
   pageRange: [number, number] | null
   columns: number
-  rows: number
   /** Horizontal overlap between tiles, in mm */
   overlapX: number
   /** Vertical overlap between tiles, in mm */

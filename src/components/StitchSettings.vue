@@ -51,14 +51,6 @@ function updateBlankSlots(raw: string) {
             @input="update('columns', parseInt(($event.target as HTMLInputElement).value, 10) || 1)"
           />
         </label>
-        <label>
-          Rows
-          <input
-            type="number" min="1" max="20"
-            :value="modelValue.rows"
-            @input="update('rows', parseInt(($event.target as HTMLInputElement).value, 10) || 1)"
-          />
-        </label>
       </div>
     </section>
 

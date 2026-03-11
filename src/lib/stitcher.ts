@@ -53,7 +53,8 @@ export async function stitchPdf(
 
   const overlapX = settings.overlapX * MM_TO_PT
   const overlapY = settings.overlapY * MM_TO_PT
-  const { columns, rows } = settings
+  const { columns } = settings
+  const rows = Math.ceil(tiles.length / columns)
 
   const refPage = allPages[startIdx]
   const tileW = refPage.getWidth()
@@ -70,26 +71,21 @@ export async function stitchPdf(
   const embeddedPages = await newDoc.embedPdf(srcDoc, neededIndices)
   const embeddedMap = new Map(neededIndices.map((idx, i) => [idx, embeddedPages[i]]))
 
-  const tilesPerSheet = columns * rows
+  const page = newDoc.addPage([pageW, pageH])
 
-  for (let sheet = 0; sheet * tilesPerSheet < tiles.length; sheet++) {
-    const sheetTiles = tiles.slice(sheet * tilesPerSheet, (sheet + 1) * tilesPerSheet)
-    const page = newDoc.addPage([pageW, pageH])
+  for (let i = 0; i < tiles.length; i++) {
+    const tileIdx = tiles[i]
+    if (tileIdx === null) continue
 
-    for (let i = 0; i < sheetTiles.length; i++) {
-      const tileIdx = sheetTiles[i]
-      if (tileIdx === null) continue
+    const embedded = embeddedMap.get(tileIdx)
+    if (!embedded) continue
 
-      const embedded = embeddedMap.get(tileIdx)
-      if (!embedded) continue
+    const col = i % columns
+    const row = Math.floor(i / columns)
+    const x = col * strideX
+    const y = (rows - 1 - row) * strideY
 
-      const col = i % columns
-      const row = Math.floor(i / columns)
-      const x = col * strideX
-      const y = (rows - 1 - row) * strideY
-
-      page.drawPage(embedded, { x, y })
-    }
+    page.drawPage(embedded, { x, y })
   }
 
   return newDoc.save()
