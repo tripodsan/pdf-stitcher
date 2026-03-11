@@ -1,3 +1,5 @@
+export type PageBox = 'media' | 'crop' | 'bleed' | 'trim' | 'art'
+
 export interface StitchSettings {
   /** 1-based inclusive range. null = all pages */
   pageRange: [number, number] | null
@@ -11,4 +13,6 @@ export interface StitchSettings {
    * e.g. [1, 4] inserts a blank as the 1st and 4th tile; source pages fill the rest.
    */
   blankSlots: number[]
+  /** Which PDF box defines tile dimensions. Default: 'trim' */
+  pageBox: PageBox
 }

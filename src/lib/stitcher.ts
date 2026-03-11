@@ -1,5 +1,16 @@
 import { PDFDocument } from 'pdf-lib'
-import type { StitchSettings } from '../types'
+import type { PDFPage } from 'pdf-lib'
+import type { PageBox, StitchSettings } from '../types'
+
+function getBox(page: PDFPage, box: PageBox) {
+  switch (box) {
+    case 'media': return page.getMediaBox()
+    case 'crop':  return page.getCropBox()
+    case 'bleed': return page.getBleedBox()
+    case 'art':   return page.getArtBox()
+    default:      return page.getTrimBox()
+  }
+}
 
 const MM_TO_PT = 72 / 25.4
 
@@ -32,6 +43,29 @@ function buildTileSequence(
   return tiles
 }
 
+export async function logPageBoxes(fileBytes: ArrayBuffer): Promise<void> {
+  const doc = await PDFDocument.load(fileBytes)
+  const pages = doc.getPages()
+  console.group(`PDF boxes — ${pages.length} page(s)`)
+  pages.forEach((page, i) => {
+    const m = page.getMediaBox()
+    const c = page.getCropBox()
+    const b = page.getBleedBox()
+    const t = page.getTrimBox()
+    const a = page.getArtBox()
+    const fmt = (r: { x: number; y: number; width: number; height: number }) =>
+      `${r.width.toFixed(2)} × ${r.height.toFixed(2)}  (x:${r.x.toFixed(2)} y:${r.y.toFixed(2)})`
+    console.group(`Page ${i + 1}`)
+    console.log(`  Media: ${fmt(m)}`)
+    console.log(`   Crop: ${fmt(c)}`)
+    console.log(`  Bleed: ${fmt(b)}`)
+    console.log(`   Trim: ${fmt(t)}`)
+    console.log(`    Art: ${fmt(a)}`)
+    console.groupEnd()
+  })
+  console.groupEnd()
+}
+
 export interface StitchResult {
   bytes: Uint8Array
   widthPt: number
@@ -62,9 +96,9 @@ export async function stitchPdf(
   const { columns } = settings
   const rows = Math.ceil(tiles.length / columns)
 
-  const refPage = allPages[startIdx]
-  const tileW = refPage.getWidth()
-  const tileH = refPage.getHeight()
+  const refBox = getBox(allPages[startIdx], settings.pageBox)
+  const tileW = refBox.width
+  const tileH = refBox.height
 
   const strideX = tileW - overlapX
   const strideY = tileH - overlapY
@@ -88,8 +122,8 @@ export async function stitchPdf(
 
     const col = i % columns
     const row = Math.floor(i / columns)
-    const x = col * strideX
-    const y = (rows - 1 - row) * strideY
+    const x = col * strideX - refBox.x
+    const y = (rows - 1 - row) * strideY - refBox.y
 
     page.drawPage(embedded, { x, y })
   }

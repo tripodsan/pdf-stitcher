@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue'
 import StitchSettings from './components/StitchSettings.vue'
 import PdfViewer from './components/PdfViewer.vue'
-import { stitchPdf } from './lib/stitcher'
+import { stitchPdf, logPageBoxes } from './lib/stitcher'
 import type { StitchSettings as StitchSettingsType } from './types'
 
 const file = ref<File | null>(null)
@@ -23,6 +23,7 @@ const settings = reactive<StitchSettingsType>({
   overlapX: 5,
   overlapY: 5,
   blankSlots: [],
+  pageBox: 'trim',
 })
 
 function onSourceLoaded(pages: number) {
@@ -39,6 +40,7 @@ async function onFileSelected(f: File) {
   error.value = null
   try {
     sourceBytes.value = await f.arrayBuffer()
+    logPageBoxes(sourceBytes.value)
   } catch {
     error.value = 'Could not read PDF. Make sure the file is a valid PDF.'
     file.value = null

@@ -55,6 +55,21 @@ function updateBlankSlots(raw: string) {
     </section>
 
     <section>
+      <h3>Page Box</h3>
+      <select
+        :value="modelValue.pageBox"
+        @change="update('pageBox', ($event.target as HTMLSelectElement).value as import('../types').PageBox)"
+      >
+        <option value="trim">Trim</option>
+        <option value="media">Media</option>
+        <option value="crop">Crop</option>
+        <option value="bleed">Bleed</option>
+        <option value="art">Art</option>
+      </select>
+      <p class="hint">Which PDF box defines tile size. Use Trim for production PDFs with bleed.</p>
+    </section>
+
+    <section>
       <h3>Overlap</h3>
       <div class="row">
         <label>
@@ -164,7 +179,7 @@ label.full {
   grid-column: 1 / -1;
 }
 
-input {
+input, select {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -175,7 +190,7 @@ input {
   box-sizing: border-box;
 }
 
-input:focus {
+input:focus, select:focus {
   outline: none;
   border-color: var(--color-accent);
 }
