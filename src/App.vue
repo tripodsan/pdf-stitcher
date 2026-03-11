@@ -17,7 +17,6 @@ const resultBytes = ref<ArrayBuffer | null>(null)
 const settings = reactive<StitchSettingsType>({
   pageRange: null,
   columns: 2,
-  rows: 3,
   overlapX: 5,
   overlapY: 5,
   blankSlots: [],
@@ -61,10 +60,9 @@ async function process() {
     URL.revokeObjectURL(resultUrl.value)
     resultUrl.value = null
   }
-  resultBytes.value = null
   try {
     const result = await stitchPdf(sourceBytes.value, settings)
-    const buf = result.buffer as ArrayBuffer
+    const buf = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer
     resultBytes.value = buf
     const blob = new Blob([buf], { type: 'application/pdf' })
     resultUrl.value = URL.createObjectURL(blob)
@@ -128,8 +126,8 @@ function clearFile() {
         </template>
       </div>
 
-      <!-- Two-column: source viewer + settings -->
-      <div v-if="file" class="workspace">
+      <!-- Three-column: source viewer + settings + result viewer -->
+      <div v-if="file" class="workspace" :class="{ 'has-result': resultBytes }">
         <PdfViewer
           class="source-viewer"
           :source="sourceBytes"
@@ -153,15 +151,16 @@ function clearFile() {
           <p v-if="error" class="error">{{ error }}</p>
           <p v-if="resultUrl && !error" class="success">Done! Click "Download result" to save.</p>
         </div>
-      </div>
 
-      <!-- Result viewer -->
-      <PdfViewer
-        v-if="resultBytes"
-        class="result-viewer"
-        :source="resultBytes"
-        label="Result"
-      />
+        <PdfViewer
+          v-if="resultBytes"
+          class="result-viewer"
+          :source="resultBytes"
+          :oversample="3"
+          :preserve-view="true"
+          label="Result"
+        />
+      </div>
     </main>
   </div>
 </template>
@@ -194,7 +193,7 @@ body {
 
 <style scoped>
 .app {
-  max-width: 960px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 2rem 1rem 4rem;
 }
@@ -289,13 +288,18 @@ header p {
 .workspace {
   margin-top: 1.5rem;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 400px 1fr;
   gap: 1.5rem;
   align-items: start;
 }
 
+.workspace.has-result {
+  grid-template-columns: 400px 1fr 750px;
+}
+
 @media (max-width: 700px) {
-  .workspace {
+  .workspace,
+  .workspace.has-result {
     grid-template-columns: 1fr;
   }
 }
@@ -310,9 +314,7 @@ header p {
   gap: 1.5rem;
 }
 
-.result-viewer {
-  margin-top: 1.5rem;
-}
+.result-viewer { }
 
 .actions {
   display: flex;
