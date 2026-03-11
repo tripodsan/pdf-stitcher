@@ -24,6 +24,7 @@ Browser-only PDF stitching tool (no backend). Everything runs client-side; files
 | `src/lib/stitcher.ts` | Core PDF imposition logic. The only place that imports `pdf-lib`. |
 | `src/types.ts` | `StitchSettings` interface shared between UI and lib. |
 | `src/components/StitchSettings.vue` | Settings form (grid, overlap, page range, blank slots). |
+| `src/components/PdfViewer.vue` | PDF viewer with pan/zoom; accepts `label`, `subtitle`, `oversample`, `preserveView` props. |
 | `src/App.vue` | File drop/upload, orchestrates processing, download. |
 
 ### How stitching works
@@ -36,7 +37,7 @@ Browser-only PDF stitching tool (no backend). Everything runs client-side; files
 4. Calculates output page dimensions: `cols × (tileW − overlapX) + overlapX` wide, same pattern vertically
 5. Embeds all needed source pages once with `newDoc.embedPdf(srcDoc, indices)`
 6. Groups tiles into sheets of `cols × rows`, creates one output page per sheet, draws each tile at `(col × strideX, (rows−1−row) × strideY)` — PDF coordinates are bottom-left origin
-7. Returns `Uint8Array` from `newDoc.save()`
+7. Returns `StitchResult { bytes, widthPt, heightPt }` — caller converts pts → mm for display
 
 Overlap/margin inputs are in **mm** and converted to PDF points (`mm × 72 / 25.4`) inside the stitcher.
 
