@@ -4,4 +4,10 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   base: '/',
+  optimizeDeps: {
+    exclude: ['mupdf'],
+  },
+  build: {
+    target: 'esnext',
+  },
 })

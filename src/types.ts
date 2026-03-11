@@ -1,5 +1,14 @@
 export type PageBox = 'media' | 'crop' | 'bleed' | 'trim' | 'art'
 
+export interface Layer {
+  /** pdfjs internal OCG id — used by the viewer to call setVisibility */
+  id: string
+  /** human-readable label; used as correlation key with pdf-lib */
+  name: string
+  /** current visibility state */
+  visible: boolean
+}
+
 export interface StitchSettings {
   /** 1-based inclusive range. null = all pages */
   pageRange: [number, number] | null
@@ -15,4 +24,6 @@ export interface StitchSettings {
   blankSlots: number[]
   /** Which PDF box defines tile dimensions. Default: 'trim' */
   pageBox: PageBox
+  /** Names of layers to suppress in the output PDF */
+  disabledLayers: string[]
 }

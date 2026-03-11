@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted, nextTick } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
+import type { Layer } from '../types'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -13,10 +14,12 @@ const props = defineProps<{
   subtitle?: string
   oversample?: number
   preserveView?: boolean
+  layerVisibility?: Record<string, boolean> | null
 }>()
 
 const emit = defineEmits<{
   loaded: [totalPages: number]
+  layersLoaded: [layers: Layer[]]
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -32,12 +35,17 @@ const isPanning = ref(false)
 let panOrigin = { x: 0, y: 0, px: 0, py: 0 }
 let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null
 let renderTask: pdfjsLib.RenderTask | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let ocConfigRef: any = null
+let nameToIdRef = new Map<string, string>()
 
 async function loadDocument(bytes: ArrayBuffer) {
   if (pdfDoc) {
     await pdfDoc.destroy()
     pdfDoc = null
   }
+  ocConfigRef = null
+  nameToIdRef = new Map()
   const copy = bytes.slice(0)
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(copy) })
   pdfDoc = await loadingTask.promise
@@ -49,6 +57,28 @@ async function loadDocument(bytes: ArrayBuffer) {
     panY.value = 0
   }
   emit('loaded', pdfDoc.numPages)
+
+  // Extract OCG layers if present
+  try {
+    const ocConfig = await pdfDoc.getOptionalContentConfig()
+    if (ocConfig) {
+      const layers: Layer[] = []
+      for (const [id, group] of ocConfig) {
+        const name = (group as { name: string; visible: boolean })?.name
+        if (!name) continue
+        const visible = (group as { name: string; visible: boolean }).visible ?? true
+        layers.push({ id: String(id), name, visible })
+        nameToIdRef.set(name, String(id))
+      }
+      if (layers.length) {
+        ocConfigRef = ocConfig
+        emit('layersLoaded', layers)
+      }
+    }
+  } catch {
+    // PDF has no OCG support — silently skip
+  }
+
   await renderPage(1)
 }
 
@@ -78,7 +108,12 @@ async function renderPage(pageNum: number) {
       wrap.value.style.height = displayHeight + 'px'
     }
     const ctx = c.getContext('2d')!
-    renderTask = page.render({ canvasContext: ctx, viewport: renderViewport, canvas: c })
+    renderTask = page.render({
+      canvasContext: ctx,
+      viewport: renderViewport,
+      canvas: c,
+      ...(ocConfigRef ? { optionalContentConfigPromise: Promise.resolve(ocConfigRef) } : {}),
+    })
     await renderTask.promise
   } catch (e: unknown) {
     if ((e as { name?: string }).name !== 'RenderingCancelledException') throw e
@@ -136,6 +171,18 @@ function doPan(e: MouseEvent) {
 function endPan() {
   isPanning.value = false
 }
+
+watch(
+  () => props.layerVisibility,
+  (vis) => {
+    if (!ocConfigRef || !vis) return
+    for (const [name, visible] of Object.entries(vis)) {
+      const id = nameToIdRef.get(name)
+      if (id !== undefined) ocConfigRef.setVisibility(id, visible)
+    }
+    renderPage(currentPage.value)
+  },
+)
 
 watch(
   () => props.source,

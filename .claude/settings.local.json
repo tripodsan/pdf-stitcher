@@ -5,7 +5,9 @@
       "Bash(npm run:*)",
       "Bash(npm ls:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "WebFetch(domain:mupdfjs.readthedocs.io)",
+      "WebFetch(domain:mupdf.readthedocs.io)"
     ]
   }
 }

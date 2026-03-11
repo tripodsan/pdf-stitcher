@@ -1,6 +1,7 @@
-import { PDFDocument, degrees } from 'pdf-lib'
+import { PDFDocument, PDFDict, PDFArray, PDFName, PDFString, PDFRef, degrees } from 'pdf-lib'
 import type { PDFPage } from 'pdf-lib'
 import type { PageBox, StitchSettings } from '../types'
+import { decryptPdf } from './decryptPdf'
 
 function getBox(page: PDFPage, box: PageBox) {
   const r = (() => {
@@ -51,9 +52,61 @@ function buildTileSequence(
   return tiles
 }
 
+function applyDisabledLayers(doc: PDFDocument, disabledNames: string[]): void {
+  const disabled = new Set(disabledNames)
+  const allRefs: PDFRef[] = []
+  const offRefs: PDFRef[] = []
+
+  for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict)) continue
+    if (obj.get(PDFName.of('Type'))?.toString() !== '/OCG') continue
+    const nameObj = obj.get(PDFName.of('Name'))
+    if (!(nameObj instanceof PDFString)) continue
+    allRefs.push(ref)
+    if (disabled.has(nameObj.decodeText())) offRefs.push(ref)
+  }
+
+  if (!allRefs.length) return
+
+  const ocgsArr = PDFArray.withContext(doc.context)
+  allRefs.forEach(r => ocgsArr.push(r))
+
+  const offArr = PDFArray.withContext(doc.context)
+  offRefs.forEach(r => offArr.push(r))
+
+  const dDict = PDFDict.withContext(doc.context)
+  dDict.set(PDFName.of('BaseState'), PDFName.of('ON'))
+  dDict.set(PDFName.of('OFF'), offArr)
+
+  const ocProps = PDFDict.withContext(doc.context)
+  ocProps.set(PDFName.of('OCGs'), ocgsArr)
+  ocProps.set(PDFName.of('D'), dDict)
+
+  doc.catalog.set(PDFName.of('OCProperties'), ocProps)
+}
+
 export async function logPageBoxes(fileBytes: ArrayBuffer): Promise<void> {
-  const doc = await PDFDocument.load(fileBytes)
-  const pages = doc.getPages()
+  let bytes: ArrayBuffer | Uint8Array = fileBytes
+  let doc: PDFDocument
+  try {
+    doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  } catch {
+    console.warn('logPageBoxes: could not load PDF')
+    return
+  }
+  let pages: PDFPage[]
+  try {
+    pages = doc.getPages()
+  } catch {
+    try {
+      bytes = await decryptPdf(bytes)
+      doc = await PDFDocument.load(bytes)
+      pages = doc.getPages()
+    } catch {
+      console.warn('logPageBoxes: could not read page tree (encrypted/malformed PDF)')
+      return
+    }
+  }
   console.group(`PDF boxes — ${pages.length} page(s)`)
   pages.forEach((page, i) => {
     const m = page.getMediaBox()
@@ -85,8 +138,17 @@ export async function stitchPdf(
   fileBytes: ArrayBuffer,
   settings: StitchSettings,
 ): Promise<StitchResult> {
-  const srcDoc = await PDFDocument.load(fileBytes)
-  const allPages = srcDoc.getPages()
+  let bytes: ArrayBuffer | Uint8Array = fileBytes
+  let srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  let allPages: PDFPage[]
+  try {
+    allPages = srcDoc.getPages()
+  } catch {
+    // pdf-lib can't parse the page tree — try decrypting via mupdf first
+    bytes = await decryptPdf(bytes)
+    srcDoc = await PDFDocument.load(bytes)
+    allPages = srcDoc.getPages()
+  }
   const total = allPages.length
 
   const [rangeStart, rangeEnd] = settings.pageRange ?? [1, total]
@@ -146,6 +208,10 @@ export async function stitchPdf(
       x, y,
       ...(tileAngle ? { rotate: degrees(-tileAngle) } : {}),
     })
+  }
+
+  if (settings.disabledLayers.length) {
+    applyDisabledLayers(newDoc, settings.disabledLayers)
   }
 
   return { bytes: await newDoc.save(), widthPt: pageW, heightPt: pageH }

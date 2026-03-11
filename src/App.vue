@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import StitchSettings from './components/StitchSettings.vue'
 import PdfViewer from './components/PdfViewer.vue'
 import { stitchPdf, logPageBoxes } from './lib/stitcher'
-import type { StitchSettings as StitchSettingsType } from './types'
+import type { StitchSettings as StitchSettingsType, Layer } from './types'
 
 const file = ref<File | null>(null)
 const totalPages = ref(0)
@@ -14,6 +14,7 @@ const resultUrl = ref<string | null>(null)
 const sourceBytes = ref<ArrayBuffer | null>(null)
 const resultBytes = ref<ArrayBuffer | null>(null)
 const resultDims = ref<{ w: number; h: number } | null>(null)
+const layers = ref<Layer[]>([])
 
 const PT_TO_MM = 25.4 / 72
 
@@ -24,7 +25,24 @@ const settings = reactive<StitchSettingsType>({
   overlapY: 5,
   blankSlots: [],
   pageBox: 'trim',
+  disabledLayers: [],
 })
+
+const layerVisibility = computed<Record<string, boolean> | null>(() =>
+  layers.value.length
+    ? Object.fromEntries(layers.value.map(l => [l.name, l.visible]))
+    : null,
+)
+
+const disabledLayers = computed(() =>
+  layers.value.filter(l => !l.visible).map(l => l.name),
+)
+
+watch(disabledLayers, (names) => { settings.disabledLayers = names })
+
+function onLayersLoaded(newLayers: Layer[]) {
+  layers.value = newLayers
+}
 
 function onSourceLoaded(pages: number) {
   totalPages.value = pages
@@ -101,6 +119,7 @@ function clearFile() {
   resultUrl.value = null
   resultDims.value = null
   totalPages.value = 0
+  layers.value = []
 }
 </script>
 
@@ -146,11 +165,25 @@ function clearFile() {
           class="source-viewer"
           :source="sourceBytes"
           label="Source"
+          :layer-visibility="layerVisibility"
           @loaded="onSourceLoaded"
+          @layers-loaded="onLayersLoaded"
         />
 
         <div class="controls">
           <StitchSettings v-model="settings" :total-pages="totalPages" />
+
+          <div v-if="layers.length" class="layers">
+            <h3 class="layers-title">Layers</h3>
+            <label v-for="layer in layers" :key="layer.name" class="layer-row">
+              <input
+                type="checkbox"
+                :checked="layer.visible"
+                @change="layer.visible = ($event.target as HTMLInputElement).checked"
+              />
+              {{ layer.name }}
+            </label>
+          </div>
 
           <div class="actions">
             <button class="btn-primary" :disabled="processing" @click="process">
@@ -392,5 +425,28 @@ button {
   margin: 0;
   font-size: 0.875rem;
   color: var(--color-success);
+}
+
+.layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.layers-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 </style>
