@@ -173,7 +173,7 @@ function clearFile() {
         <div class="controls">
           <StitchSettings v-model="settings" :total-pages="totalPages" />
 
-          <div v-if="layers.length" class="layers">
+          <div v-if="layers.length > 1" class="layers">
             <h3 class="layers-title">Layers</h3>
             <label v-for="layer in layers" :key="layer.name" class="layer-row">
               <input
