@@ -13,6 +13,9 @@ const error = ref<string | null>(null)
 const resultUrl = ref<string | null>(null)
 const sourceBytes = ref<ArrayBuffer | null>(null)
 const resultBytes = ref<ArrayBuffer | null>(null)
+const resultDims = ref<{ w: number; h: number } | null>(null)
+
+const PT_TO_MM = 25.4 / 72
 
 const settings = reactive<StitchSettingsType>({
   pageRange: null,
@@ -32,6 +35,7 @@ async function onFileSelected(f: File) {
   file.value = f
   resultUrl.value = null
   resultBytes.value = null
+  resultDims.value = null
   error.value = null
   try {
     sourceBytes.value = await f.arrayBuffer()
@@ -62,7 +66,11 @@ async function process() {
     resultUrl.value = null
   }
   try {
-    const result = await stitchPdf(sourceBytes.value, settings)
+    const { bytes: result, widthPt, heightPt } = await stitchPdf(sourceBytes.value, settings)
+    resultDims.value = {
+      w: Math.round(widthPt * PT_TO_MM),
+      h: Math.round(heightPt * PT_TO_MM),
+    }
     const buf = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer
     resultBytes.value = buf
     const blob = new Blob([buf], { type: 'application/pdf' })
@@ -79,7 +87,8 @@ function downloadResult() {
   const a = document.createElement('a')
   a.href = resultUrl.value
   const base = file.value.name.replace(/\.pdf$/i, '')
-  a.download = `${base}-stitched.pdf`
+  const dimSuffix = resultDims.value ? `-${resultDims.value.w}x${resultDims.value.h}` : ''
+  a.download = `${base}${dimSuffix}.pdf`
   a.click()
 }
 
@@ -88,6 +97,7 @@ function clearFile() {
   sourceBytes.value = null
   resultBytes.value = null
   resultUrl.value = null
+  resultDims.value = null
   totalPages.value = 0
 }
 </script>
@@ -160,6 +170,7 @@ function clearFile() {
           :oversample="3"
           :preserve-view="true"
           label="Result"
+          :subtitle="resultDims ? `${resultDims.w} × ${resultDims.h} mm` : undefined"
         />
       </div>
     </main>

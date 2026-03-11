@@ -32,10 +32,16 @@ function buildTileSequence(
   return tiles
 }
 
+export interface StitchResult {
+  bytes: Uint8Array
+  widthPt: number
+  heightPt: number
+}
+
 export async function stitchPdf(
   fileBytes: ArrayBuffer,
   settings: StitchSettings,
-): Promise<Uint8Array> {
+): Promise<StitchResult> {
   const srcDoc = await PDFDocument.load(fileBytes)
   const allPages = srcDoc.getPages()
   const total = allPages.length
@@ -88,5 +94,5 @@ export async function stitchPdf(
     page.drawPage(embedded, { x, y })
   }
 
-  return newDoc.save()
+  return { bytes: await newDoc.save(), widthPt: pageW, heightPt: pageH }
 }

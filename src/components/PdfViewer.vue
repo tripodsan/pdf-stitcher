@@ -10,6 +10,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 const props = defineProps<{
   source: ArrayBuffer | null
   label: string
+  subtitle?: string
   oversample?: number
   preserveView?: boolean
 }>()
@@ -162,6 +163,7 @@ onUnmounted(async () => {
 <template>
   <div class="viewer">
     <div class="viewer-label">{{ label }}</div>
+    <div v-if="subtitle" class="viewer-subtitle">{{ subtitle }}</div>
     <div
       ref="wrap"
       class="canvas-wrap"
@@ -208,6 +210,13 @@ onUnmounted(async () => {
   letter-spacing: 0.05em;
   color: var(--color-text-muted);
   align-self: flex-start;
+}
+
+.viewer-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  align-self: flex-start;
+  margin-top: -0.5rem;
 }
 
 .canvas-wrap {
