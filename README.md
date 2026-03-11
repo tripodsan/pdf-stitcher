@@ -4,6 +4,8 @@ Browser-only PDF imposition tool. Reassemble tiled PDF pages into a single large
 
 **Live:** https://pdf.atelier-feldegg.ch
 
+![PDF Stitcher screenshot](docs/screenshot.png)
+
 ---
 
 ## How to use
