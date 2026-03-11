@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.5.207",
     "vue": "^3.4.0"
   },
   "devDependencies": {

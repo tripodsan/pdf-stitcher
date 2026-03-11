@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import StitchSettings from './components/StitchSettings.vue'
+import PdfViewer from './components/PdfViewer.vue'
 import { stitchPdf } from './lib/stitcher'
 import type { StitchSettings as StitchSettingsType } from './types'
 
@@ -10,6 +11,8 @@ const isDragging = ref(false)
 const processing = ref(false)
 const error = ref<string | null>(null)
 const resultUrl = ref<string | null>(null)
+const sourceBytes = ref<ArrayBuffer | null>(null)
+const resultBytes = ref<ArrayBuffer | null>(null)
 
 const settings = reactive<StitchSettingsType>({
   pageRange: null,
@@ -20,23 +23,22 @@ const settings = reactive<StitchSettingsType>({
   blankSlots: [],
 })
 
-async function readPageCount(f: File): Promise<number> {
-  const { PDFDocument } = await import('pdf-lib')
-  const bytes = await f.arrayBuffer()
-  const doc = await PDFDocument.load(bytes)
-  return doc.getPageCount()
+function onSourceLoaded(pages: number) {
+  totalPages.value = pages
+  settings.pageRange = [1, pages]
 }
 
 async function onFileSelected(f: File) {
   file.value = f
   resultUrl.value = null
+  resultBytes.value = null
   error.value = null
   try {
-    totalPages.value = await readPageCount(f)
-    settings.pageRange = [1, totalPages.value]
+    sourceBytes.value = await f.arrayBuffer()
   } catch {
     error.value = 'Could not read PDF. Make sure the file is a valid PDF.'
     file.value = null
+    sourceBytes.value = null
   }
 }
 
@@ -52,17 +54,19 @@ function onDrop(e: DragEvent) {
 }
 
 async function process() {
-  if (!file.value) return
+  if (!sourceBytes.value) return
   processing.value = true
   error.value = null
   if (resultUrl.value) {
     URL.revokeObjectURL(resultUrl.value)
     resultUrl.value = null
   }
+  resultBytes.value = null
   try {
-    const bytes = await file.value.arrayBuffer()
-    const result = await stitchPdf(bytes, settings)
-    const blob = new Blob([result.buffer as ArrayBuffer], { type: 'application/pdf' })
+    const result = await stitchPdf(sourceBytes.value, settings)
+    const buf = result.buffer as ArrayBuffer
+    resultBytes.value = buf
+    const blob = new Blob([buf], { type: 'application/pdf' })
     resultUrl.value = URL.createObjectURL(blob)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'An unexpected error occurred.'
@@ -78,6 +82,14 @@ function downloadResult() {
   const base = file.value.name.replace(/\.pdf$/i, '')
   a.download = `${base}-stitched.pdf`
   a.click()
+}
+
+function clearFile() {
+  file.value = null
+  sourceBytes.value = null
+  resultBytes.value = null
+  resultUrl.value = null
+  totalPages.value = 0
 }
 </script>
 
@@ -112,27 +124,44 @@ function downloadResult() {
             <span class="file-name">{{ file.name }}</span>
             <span class="file-meta">{{ totalPages }} pages</span>
           </div>
-          <button class="btn-ghost" @click="file = null; resultUrl = null">Change</button>
+          <button class="btn-ghost" @click="clearFile">Change</button>
         </template>
       </div>
 
-      <!-- Settings + actions -->
-      <div v-if="file" class="controls">
-        <StitchSettings v-model="settings" :total-pages="totalPages" />
+      <!-- Two-column: source viewer + settings -->
+      <div v-if="file" class="workspace">
+        <PdfViewer
+          class="source-viewer"
+          :source="sourceBytes"
+          label="Source"
+          @loaded="onSourceLoaded"
+        />
 
-        <div class="actions">
-          <button class="btn-primary" :disabled="processing" @click="process">
-            <span v-if="processing">Processing…</span>
-            <span v-else>Stitch PDF</span>
-          </button>
-          <button v-if="resultUrl" class="btn-secondary" @click="downloadResult">
-            Download result
-          </button>
+        <div class="controls">
+          <StitchSettings v-model="settings" :total-pages="totalPages" />
+
+          <div class="actions">
+            <button class="btn-primary" :disabled="processing" @click="process">
+              <span v-if="processing">Processing…</span>
+              <span v-else>Stitch PDF</span>
+            </button>
+            <button v-if="resultUrl" class="btn-secondary" @click="downloadResult">
+              Download result
+            </button>
+          </div>
+
+          <p v-if="error" class="error">{{ error }}</p>
+          <p v-if="resultUrl && !error" class="success">Done! Click "Download result" to save.</p>
         </div>
-
-        <p v-if="error" class="error">{{ error }}</p>
-        <p v-if="resultUrl && !error" class="success">Done! Click "Download result" to save.</p>
       </div>
+
+      <!-- Result viewer -->
+      <PdfViewer
+        v-if="resultBytes"
+        class="result-viewer"
+        :source="resultBytes"
+        label="Result"
+      />
     </main>
   </div>
 </template>
@@ -165,7 +194,7 @@ body {
 
 <style scoped>
 .app {
-  max-width: 640px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 2rem 1rem 4rem;
 }
@@ -257,8 +286,21 @@ header p {
   color: var(--color-text-muted);
 }
 
-.controls {
+.workspace {
   margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.controls {
   padding: 1.5rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -266,6 +308,10 @@ header p {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.result-viewer {
+  margin-top: 1.5rem;
 }
 
 .actions {
