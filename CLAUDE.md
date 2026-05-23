@@ -22,6 +22,7 @@ Browser-only PDF stitching tool (no backend). Everything runs client-side; files
 | File | Purpose |
 |------|---------|
 | `src/lib/stitcher.ts` | Core PDF imposition logic + `logPageBoxes` helper. The only place that imports `pdf-lib`. |
+| `src/lib/decryptPdf.ts` | Lazy-loads mupdf WASM to decrypt encrypted PDFs; called as a fallback when pdf-lib fails to parse. |
 | `src/types.ts` | `StitchSettings` and `PageBox` types shared between UI and lib. |
 | `src/components/StitchSettings.vue` | Settings form (grid, page box, overlap, page range). |
 | `src/components/TileGrid.vue` | Visual tile grid: page thumbnails (pdfjs), drag-to-reorder, insert blank, remove tile. |
@@ -61,6 +62,6 @@ Overlap/margin inputs are in **mm** and converted to PDF points (`mm × 72 / 25.
 
 Deployed to `https://pdf.atelier-feldegg.ch` via GitHub Pages. Push to `main` triggers the deploy workflow. Vite `base` is `/`. The `public/CNAME` file sets the custom domain on every deploy.
 
-### Planned future feature
+### mupdf integration
 
-Content removal (strip page marks, borders drawn inside content streams) will require **mupdf.js** (WASM). The plan is to lazy-load it alongside pdf-lib — pdf-lib handles stitching, mupdf handles content editing. They can coexist.
+**mupdf** (WASM) is already a dependency, lazy-loaded only by `decryptPdf.ts` as a fallback for encrypted PDFs. A planned future feature — content removal (stripping page marks, borders drawn inside content streams) — will extend this same integration: pdf-lib handles stitching, mupdf handles content editing.

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { Layer } from '../types'
 
@@ -31,6 +31,13 @@ const userZoom = ref(1.0)
 const panX = ref(0)
 const panY = ref(0)
 const isPanning = ref(false)
+const fitScaleRef = ref(1)
+
+const isMeasuring   = ref(false)
+const isMeasureDrag = ref(false)
+const measureStartPt = ref<{ x: number; y: number } | null>(null)
+const measureLivePt  = ref<{ x: number; y: number } | null>(null)
+const measureEndPt   = ref<{ x: number; y: number } | null>(null)
 
 let panOrigin = { x: 0, y: 0, px: 0, py: 0 }
 let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null
@@ -97,6 +104,7 @@ async function renderPage(pageNum: number) {
     const containerWidth = canvas.value.parentElement!.clientWidth || 600
     const naturalVp = page.getViewport({ scale: 1 })
     const fitScale = containerWidth / naturalVp.width
+    fitScaleRef.value = fitScale
     const n = props.oversample ?? 1
     const renderViewport = page.getViewport({ scale: fitScale * n })
     const displayWidth = containerWidth
@@ -130,6 +138,7 @@ async function prev() {
   currentPage.value--
   panX.value = 0
   panY.value = 0
+  clearMeasure()
   await renderPage(currentPage.value)
 }
 
@@ -138,6 +147,7 @@ async function next() {
   currentPage.value++
   panX.value = 0
   panY.value = 0
+  clearMeasure()
   await renderPage(currentPage.value)
 }
 
@@ -174,6 +184,82 @@ function endPan() {
   isPanning.value = false
 }
 
+function screenToPt(clientX: number, clientY: number) {
+  const rect = wrap.value!.getBoundingClientRect()
+  const scale = fitScaleRef.value * userZoom.value
+  return {
+    x: (clientX - rect.left - panX.value) / scale,
+    y: (clientY - rect.top  - panY.value) / scale,
+  }
+}
+
+const measureSvgA = computed(() => {
+  if (!measureStartPt.value) return null
+  const scale = fitScaleRef.value * userZoom.value
+  return {
+    x: measureStartPt.value.x * scale + panX.value,
+    y: measureStartPt.value.y * scale + panY.value,
+  }
+})
+
+const measureSvgB = computed(() => {
+  const end = isMeasureDrag.value ? measureLivePt.value : measureEndPt.value
+  if (!end) return null
+  const scale = fitScaleRef.value * userZoom.value
+  return { x: end.x * scale + panX.value, y: end.y * scale + panY.value }
+})
+
+const measureResult = computed(() => {
+  if (!measureStartPt.value || !measureEndPt.value) return null
+  const dx = Math.abs(measureEndPt.value.x - measureStartPt.value.x) * 25.4 / 72
+  const dy = Math.abs(measureEndPt.value.y - measureStartPt.value.y) * 25.4 / 72
+  return { dxMm: dx, dyMm: dy }
+})
+
+function clearMeasure() {
+  measureStartPt.value = null
+  measureEndPt.value   = null
+  measureLivePt.value  = null
+  isMeasureDrag.value  = false
+}
+
+function toggleMeasure() {
+  isMeasuring.value = !isMeasuring.value
+  if (!isMeasuring.value) clearMeasure()
+}
+
+function onMeasureDown(e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  measureStartPt.value = screenToPt(e.clientX, e.clientY)
+  measureEndPt.value   = null
+  measureLivePt.value  = measureStartPt.value
+  isMeasureDrag.value  = true
+}
+
+function onMeasureMove(e: MouseEvent) {
+  e.stopPropagation()
+  if (!isMeasureDrag.value) return
+  measureLivePt.value = screenToPt(e.clientX, e.clientY)
+}
+
+function onMeasureUp(e: MouseEvent) {
+  e.stopPropagation()
+  if (!isMeasureDrag.value) return
+  measureEndPt.value  = screenToPt(e.clientX, e.clientY)
+  measureLivePt.value = null
+  isMeasureDrag.value = false
+}
+
+function onKeyEsc(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isMeasuring.value) {
+    isMeasuring.value = false
+    clearMeasure()
+  }
+}
+
+onMounted(() => { document.addEventListener('keydown', onKeyEsc) })
+
 watch(
   () => props.layerVisibility,
   (vis, prev) => {
@@ -204,6 +290,7 @@ watch(
 )
 
 onUnmounted(async () => {
+  document.removeEventListener('keydown', onKeyEsc)
   if (renderTask) renderTask.cancel()
   if (pdfDoc) await pdfDoc.destroy()
 })
@@ -227,6 +314,24 @@ onUnmounted(async () => {
         :style="{ transform: `translate(${panX}px, ${panY}px) scale(${userZoom})`, transformOrigin: '0 0' }"
       />
       <div v-if="rendering" class="overlay">Rendering…</div>
+      <svg
+        v-if="isMeasuring"
+        class="measure-overlay"
+        @mousedown="onMeasureDown"
+        @mousemove="onMeasureMove"
+        @mouseup="onMeasureUp"
+        @mouseleave="onMeasureUp"
+      >
+        <template v-if="measureSvgA && measureSvgB">
+          <line :x1="measureSvgA.x" :y1="measureSvgA.y" :x2="measureSvgB.x" :y2="measureSvgB.y" class="measure-line-main" />
+          <line :x1="measureSvgA.x" :y1="measureSvgA.y" :x2="measureSvgB.x" :y2="measureSvgA.y" class="measure-line-comp" />
+          <line :x1="measureSvgB.x" :y1="measureSvgA.y" :x2="measureSvgB.x" :y2="measureSvgB.y" class="measure-line-comp" />
+          <text v-if="measureResult" :x="(measureSvgA.x + measureSvgB.x) / 2" :y="measureSvgA.y - 6" class="measure-text" text-anchor="middle">{{ measureResult.dxMm.toFixed(1) }} mm</text>
+          <text v-if="measureResult" :x="measureSvgB.x + 6" :y="(measureSvgA.y + measureSvgB.y) / 2" class="measure-text" dominant-baseline="middle">{{ measureResult.dyMm.toFixed(1) }} mm</text>
+          <circle :cx="measureSvgA.x" :cy="measureSvgA.y" r="3" class="measure-dot" />
+          <circle :cx="measureSvgB.x" :cy="measureSvgB.y" r="3" class="measure-dot" />
+        </template>
+      </svg>
     </div>
     <div v-if="totalPages > 0" class="nav">
       <button class="btn-nav" :disabled="currentPage <= 1 || rendering" @click="prev">‹</button>
@@ -236,6 +341,8 @@ onUnmounted(async () => {
       <button class="btn-nav" :disabled="rendering" @click="zoomOut">−</button>
       <button class="btn-zoom-label" :disabled="rendering" @click="zoomReset">{{ Math.round(userZoom * 100) }}%</button>
       <button class="btn-nav" :disabled="rendering" @click="zoomIn">+</button>
+      <span class="nav-sep" />
+      <button class="btn-nav" :class="{ active: isMeasuring }" :title="isMeasuring ? 'Exit ruler (Esc)' : 'Measure distance'" @click="toggleMeasure">⊢</button>
     </div>
   </div>
 </template>
@@ -358,5 +465,45 @@ onUnmounted(async () => {
 .btn-zoom-label:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.btn-nav.active {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.measure-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.measure-line-main {
+  stroke: #2563eb;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.measure-line-comp {
+  stroke: #2563eb;
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.measure-dot {
+  fill: #2563eb;
+}
+
+.measure-text {
+  font-size: 11px;
+  font-family: monospace;
+  fill: #1d4ed8;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3px;
+  pointer-events: none;
 }
 </style>
