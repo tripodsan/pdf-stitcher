@@ -251,6 +251,19 @@ function onMeasureUp(e: MouseEvent) {
   isMeasureDrag.value = false
 }
 
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+  const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
+  const newZoom = Math.max(0.2, Math.min(8, userZoom.value * factor))
+  const ratio = newZoom / userZoom.value
+  const rect = wrap.value!.getBoundingClientRect()
+  const mx = e.clientX - rect.left
+  const my = e.clientY - rect.top
+  panX.value = mx + (panX.value - mx) * ratio
+  panY.value = my + (panY.value - my) * ratio
+  userZoom.value = newZoom
+}
+
 function onKeyEsc(e: KeyboardEvent) {
   if (e.key === 'Escape' && isMeasuring.value) {
     isMeasuring.value = false
@@ -258,7 +271,10 @@ function onKeyEsc(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => { document.addEventListener('keydown', onKeyEsc) })
+onMounted(() => {
+  document.addEventListener('keydown', onKeyEsc)
+  wrap.value?.addEventListener('wheel', onWheel, { passive: false })
+})
 
 watch(
   () => props.layerVisibility,
@@ -291,6 +307,7 @@ watch(
 
 onUnmounted(async () => {
   document.removeEventListener('keydown', onKeyEsc)
+  wrap.value?.removeEventListener('wheel', onWheel)
   if (renderTask) renderTask.cancel()
   if (pdfDoc) await pdfDoc.destroy()
 })
