@@ -102,6 +102,27 @@ function stripHelperBorders(stream: string): string {
     }
   }
 
+  // PAT-style: red badge circle (0.87611 0 0 rg ... h f)
+  for (let i = 3; i < tokens.length; i++) {
+    if (tokens[i] === 'rg' && isApproxColor(tokens, i - 3, [0.87611, 0, 0])) {
+      const sectionStart = findSectionStart(tokens, i - 3)
+      const blockEnd = findQDepthBlockEnd(tokens, i + 1)
+      ranges.push([sectionStart, blockEnd])
+    }
+  }
+
+  // PAT-style: rotated badge text (q 0 1 -1 0 x y cm ... BT...ET Q)
+  for (let i = 0; i + 7 < tokens.length; i++) {
+    if (tokens[i] === 'q' && tokens[i + 7] === 'cm' &&
+        Math.abs(parseFloat(tokens[i + 1])) < 0.001 &&
+        Math.abs(parseFloat(tokens[i + 2]) - 1) < 0.001 &&
+        Math.abs(parseFloat(tokens[i + 3]) + 1) < 0.001 &&
+        Math.abs(parseFloat(tokens[i + 4])) < 0.001) {
+      const blockEnd = findQDepthBlockEnd(tokens, i + 1)
+      ranges.push([i, blockEnd])
+    }
+  }
+
   if (ranges.length === 0) return stream
   return applyExcisions(tokens, ranges)
 }
