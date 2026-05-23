@@ -26,4 +26,6 @@ export interface StitchSettings {
   pageBox: PageBox
   /** Names of layers to suppress in the output PDF */
   disabledLayers: string[]
+  /** Strip corner registration marks and border rectangles from source pages before stitching */
+  removeBorders?: boolean
 }

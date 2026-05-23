@@ -85,7 +85,13 @@ async function process() {
     resultUrl.value = null
   }
   try {
-    const { bytes: result, widthPt, heightPt } = await stitchPdf(sourceBytes.value, settings)
+    let srcBytes = sourceBytes.value
+    if (settings.removeBorders) {
+      const { removeBorders } = await import('./lib/removeBorders')
+      const cleaned = await removeBorders(srcBytes)
+      srcBytes = cleaned.buffer.slice(cleaned.byteOffset, cleaned.byteOffset + cleaned.byteLength) as ArrayBuffer
+    }
+    const { bytes: result, widthPt, heightPt } = await stitchPdf(srcBytes, settings)
     resultDims.value = {
       w: Math.round(widthPt * PT_TO_MM),
       h: Math.round(heightPt * PT_TO_MM),

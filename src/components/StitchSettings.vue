@@ -105,6 +105,19 @@ function updateRange(which: 'start' | 'end', raw: string) {
       <p class="hint">Total pages: {{ totalPages }}</p>
     </section>
 
+    <section>
+      <h3>Post-processing</h3>
+      <label class="checkbox-row">
+        <input
+          type="checkbox"
+          :checked="modelValue.removeBorders ?? false"
+          @change="update('removeBorders', ($event.target as HTMLInputElement).checked)"
+        />
+        Remove page borders
+      </label>
+      <p class="hint">Strips corner registration marks and border rectangles from each source page before stitching.</p>
+    </section>
+
   </div>
 </template>
 
@@ -177,5 +190,16 @@ input:focus, select:focus {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;
   color: var(--color-text-muted);
+}
+
+.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: auto;
+  flex-shrink: 0;
 }
 </style>
