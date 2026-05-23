@@ -111,6 +111,24 @@ function stripHelperBorders(stream: string): string {
     }
   }
 
+  // Birkin-style: /OC BDC blocks containing black border rects + triangle marks
+  for (let i = 2; i < tokens.length; i++) {
+    if ((tokens[i] === 'BDC' || tokens[i] === 'BMC') && tokens[i - 2] === '/OC') {
+      let depth = 1, emcIdx = -1
+      for (let j = i + 1; j < tokens.length; j++) {
+        if (tokens[j] === 'BDC' || tokens[j] === 'BMC') depth++
+        else if (tokens[j] === 'EMC') { depth--; if (depth === 0) { emcIdx = j; break } }
+      }
+      if (emcIdx === -1) continue
+      let hasBlackRGB = false, reCount = 0
+      for (let j = i + 1; j < emcIdx; j++) {
+        if (tokens[j] === 'RG' && j >= 3 && isApproxColor(tokens, j - 3, [0, 0, 0])) hasBlackRGB = true
+        if (tokens[j] === 're') reCount++
+      }
+      if (hasBlackRGB && reCount >= 3) ranges.push([i - 2, emcIdx + 1])
+    }
+  }
+
   // PAT-style: rotated badge text (q 0 1 -1 0 x y cm ... BT...ET Q)
   for (let i = 0; i + 7 < tokens.length; i++) {
     if (tokens[i] === 'q' && tokens[i + 7] === 'cm' &&
