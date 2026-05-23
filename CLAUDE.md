@@ -9,6 +9,7 @@ npm run dev        # start Vite dev server
 npm run build      # type-check + production build
 npm run preview    # preview production build
 npm run typecheck  # type-check only (no emit)
+npm run analyze-pdf <file.pdf> [maxPages]  # inspect PDF content streams (see below)
 ```
 
 ## Architecture
@@ -64,4 +65,30 @@ Deployed to `https://pdf.atelier-feldegg.ch` via GitHub Pages. Push to `main` tr
 
 ### mupdf integration
 
-**mupdf** (WASM) is already a dependency, lazy-loaded only by `decryptPdf.ts` as a fallback for encrypted PDFs. A planned future feature — content removal (stripping page marks, borders drawn inside content streams) — will extend this same integration: pdf-lib handles stitching, mupdf handles content editing.
+**mupdf** (WASM) is lazy-loaded by two modules:
+- `decryptPdf.ts` — fallback decryption when pdf-lib can't parse an encrypted PDF
+- `removeBorders.ts` — strips helper marks from source pages before stitching (corner registration marks, border rectangles, alignment diamonds, pagination overlays, badge circles)
+
+`removeBorders.ts` uses a token-level content stream rewriter. It detects known mark signatures and excises their token ranges before reassembling the stream. Add new rules in `stripHelperBorders()` by identifying a unique color or structural signature and pushing a `[start, end]` range onto the `ranges` array.
+
+### PDF stream analyzer
+
+`scripts/analyze-pdf-streams.mjs` is a Node.js dev tool for inspecting PDF content streams to identify helper-mark signatures before writing a removal rule. Run it when a new PDF style isn't cleaned up correctly:
+
+```bash
+npm run analyze-pdf tmp/somefile.pdf [maxPages]
+```
+
+Output per page: `/OC BDC` blocks with `re` counts and color values, `/Cs*` color spaces, PAT-style `0 G re S` borders, `/Fm* Do` XObject calls, and all `rg`/`RG`/`scn`/`SCN` color values found outside BDC blocks.
+
+**Known PDF styles handled by `removeBorders.ts`:**
+
+| Style | Signature | What's removed |
+|-------|-----------|----------------|
+| PAT | `/Cs8 CS` + `0 G re S` | Corner L-marks + border rect |
+| PAT | `0.87611 0 0 rg` … `h f` | Red badge circle |
+| PAT | `q 0 1 -1 0 … cm` | Rotated badge text |
+| BECKY | `0.925 0.125 0.153 SCN` + `re S` | Red border rectangles |
+| BECKY | `0.184 0.208 0.561 scn` | Blue alignment diamonds |
+| BECKY | `/Fm* Do` | Pagination overlays |
+| Birkin | `/OC BDC` with `0 0 0 RG` + ≥3 `re` | Border rects + triangle marks |

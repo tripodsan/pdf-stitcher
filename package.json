@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "analyze-pdf": "node scripts/analyze-pdf-streams.mjs"
   },
   "dependencies": {
     "mupdf": "^1.27.0",
