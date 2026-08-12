@@ -18,6 +18,21 @@ function update<K extends keyof StitchSettings>(key: K, value: StitchSettings[K]
 const rangeStart = computed(() => props.modelValue.pageRange?.[0] ?? 1)
 const rangeEnd = computed(() => props.modelValue.pageRange?.[1] ?? props.totalPages)
 
+const gridPrimaryLabel = computed(() => (props.modelValue.fillOrder === 'column' ? 'Rows' : 'Columns'))
+
+const gridPrimaryValue = computed(() =>
+  props.modelValue.fillOrder === 'column' ? props.modelValue.rows : props.modelValue.columns,
+)
+
+function updateGridPrimary(raw: string) {
+  const n = Math.max(1, parseInt(raw, 10) || 1)
+  if (props.modelValue.fillOrder === 'column') {
+    update('rows', n)
+  } else {
+    update('columns', n)
+  }
+}
+
 function updateRange(which: 'start' | 'end', raw: string) {
   const val = parseInt(raw, 10)
   if (isNaN(val)) return
@@ -35,11 +50,11 @@ function updateRange(which: 'start' | 'end', raw: string) {
       <h3>Grid</h3>
       <div class="row">
         <label>
-          Columns
+          {{ gridPrimaryLabel }}
           <input
             type="number" min="1" max="20"
-            :value="modelValue.columns"
-            @input="update('columns', parseInt(($event.target as HTMLInputElement).value, 10) || 1)"
+            :value="gridPrimaryValue"
+            @input="updateGridPrimary(($event.target as HTMLInputElement).value)"
           />
         </label>
       </div>

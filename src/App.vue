@@ -23,11 +23,16 @@ const PT_TO_MM = 25.4 / 72
 const settings = reactive<StitchSettingsType>({
   pageRange: null,
   columns: 2,
+  rows: 2,
   overlapX: 5,
   overlapY: 5,
   tileSequence: [],
   pageBox: 'trim',
   disabledLayers: [],
+  fillOrder: 'row',
+  horizontalFlow: 'ltr',
+  verticalFlow: 'ttb',
+  tileRotations: {},
 })
 
 const disabledLayers = computed(() =>
@@ -37,6 +42,29 @@ const disabledLayers = computed(() =>
 watch(disabledLayers, (names) => { settings.disabledLayers = names })
 
 watch(() => settings.pageRange, () => { settings.tileSequence = [] }, { deep: true })
+
+function currentTileCount(): number {
+  return settings.pageRange
+    ? settings.pageRange[1] - settings.pageRange[0] + 1
+    : totalPages.value
+}
+
+// Keep `columns` derived from `rows` whenever fill order is column-major, so a
+// later page-range change doesn't leave `columns` stale relative to the rows
+// the user actually asked for.
+watch(
+  () => [settings.fillOrder, settings.pageRange, settings.rows] as const,
+  ([mode], oldValue) => {
+    const prevMode = oldValue?.[0]
+    if (mode === 'column' && prevMode !== 'column') {
+      settings.rows = Math.max(1, Math.ceil(currentTileCount() / Math.max(1, settings.columns)))
+    }
+    if (mode === 'column') {
+      settings.columns = Math.max(1, Math.ceil(currentTileCount() / Math.max(1, settings.rows)))
+    }
+  },
+  { deep: true },
+)
 
 function onLayersLoaded(newLayers: Layer[]) {
   layers.value = newLayers
@@ -222,8 +250,16 @@ function clearFile() {
               :source-bytes="sourceBytes"
               :page-range="settings.pageRange"
               :columns="settings.columns"
+              :fill-order="settings.fillOrder"
+              :horizontal-flow="settings.horizontalFlow"
+              :vertical-flow="settings.verticalFlow"
+              :rotations="settings.tileRotations"
               @loaded="onSourceLoaded"
               @layers-loaded="onLayersLoaded"
+              @update:fill-order="settings.fillOrder = $event"
+              @update:horizontal-flow="settings.horizontalFlow = $event"
+              @update:vertical-flow="settings.verticalFlow = $event"
+              @update:rotations="settings.tileRotations = $event"
             />
           </div>
 

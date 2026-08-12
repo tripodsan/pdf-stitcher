@@ -175,8 +175,12 @@ export async function stitchPdf(
 
     // PDF /Rotate is clockwise. embedPdf bakes the content stream but not the
     // rotation, so we must apply it manually and shift the draw origin so the
-    // rotated content still lands in the correct tile slot.
-    const tileAngle = allPages[tileIdx].getRotation().angle
+    // rotated content still lands in the correct tile slot. A manual per-tile
+    // override (e.g. correcting a wrongly-detected orientation) is layered on
+    // top of the page's own /Rotate value before computing the shift.
+    const nativeAngle = allPages[tileIdx].getRotation().angle
+    const userDelta = settings.tileRotations[tileIdx] ?? 0
+    const tileAngle = (nativeAngle + userDelta) % 360
     if (tileAngle === 90)       { y += tileH }
     else if (tileAngle === 180) { x += tileW; y += tileH }
     else if (tileAngle === 270) { x += tileW }
