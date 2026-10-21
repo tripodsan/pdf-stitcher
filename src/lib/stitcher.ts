@@ -112,11 +112,15 @@ export async function stitchPdf(
 ): Promise<StitchResult> {
   let bytes: ArrayBuffer | Uint8Array = fileBytes
   let srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true })
-  let allPages: PDFPage[]
+  let allPages: PDFPage[] | undefined
   try {
     allPages = srcDoc.getPages()
   } catch {
-    // pdf-lib can't parse the page tree — try decrypting via mupdf first
+    // pdf-lib can't parse the page tree — fall through to mupdf decryption
+  }
+  // Encrypted PDFs can have a readable page tree while their content streams
+  // stay encrypted; embedding those copies ciphertext into the output.
+  if (!allPages || srcDoc.isEncrypted) {
     bytes = await decryptPdf(bytes)
     srcDoc = await PDFDocument.load(bytes)
     allPages = srcDoc.getPages()
